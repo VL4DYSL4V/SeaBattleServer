@@ -9,7 +9,6 @@ import game.entity.Coordinates;
 import game.entity.Ship;
 import game.enums.FiringResult;
 import game.enums.Level;
-import game.gameBehaviour.GameBehaviour;
 import game.service.FieldGenerator;
 import protocol.Request;
 import enums.RequestType;
@@ -106,16 +105,8 @@ public class Server {
     private Battle createBattle(Level level, FieldGenerator fieldGenerator) {
         Collection<Ship> clientShips = fieldGenerator.createShips();
         Collection<Ship> serverShips = fieldGenerator.createShips();
-        GameBehaviour serverBehaviour = null;
-//        if (level == Level.SIMPLE) {
-//            serverBehaviour = new SimpleServerBehaviour(serverShips, clientShips);
-//        } else if (level == Level.ADVANCED) {
-//            serverBehaviour = new AdvancedServerBehaviour(serverShips, clientShips);
-//        } else {
-//            serverBehaviour = null;
-//        }
-        GameBehaviour clientBehaviour = null;
-        return new Battle(serverBehaviour, clientBehaviour);
+
+        return null;
     }
 
     private FiringResult handleMove(Request moveRequest) throws NoSuchUserException {
