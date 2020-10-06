@@ -1,5 +1,6 @@
 package protocol;
 
+import enums.Opponent;
 import game.entity.Coordinates;
 import game.enums.Level;
 import enums.RequestType;
@@ -38,10 +39,12 @@ public class Request implements Externalizable {
         return new Request(fromWhom, RequestType.EXIT);
     }
 
-    public static Request registrationRequest(String whom, Integer transmittersServerPort, Level level) {
+    public static Request registrationRequest(String whom, Integer transmittersServerPort,
+                                              Level level, Opponent opponent) {
         Request out = new Request(whom, RequestType.REGISTRATION);
         out.addAttribute("port", transmittersServerPort);
         out.addAttribute("level", level);
+        out.addAttribute("opponent", opponent);
         return out;
     }
 

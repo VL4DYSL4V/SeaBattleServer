@@ -1,19 +1,9 @@
 package main;
 
-import game.battle.Battle;
-import game.entity.Coordinates;
-import game.entity.Ship;
-
-import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import game.service.FieldGenerator;
-
-import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 import java.util.*;
 import java.nio.*;
 import java.nio.channels.*;
@@ -21,12 +11,6 @@ import java.nio.channels.*;
 //Current lowest amount of moves = 23 :D
 public class Main {
     public static void main(String[] args) throws JAXBException {
-
-        FieldGenerator fieldGenerator = new FieldGenerator();
-        Collection<Ship> clientShips = fieldGenerator.createShips();
-        Collection<Ship> serverShips = fieldGenerator.createShips();
-
-
         System.out.println("Battle is over");
     }
 

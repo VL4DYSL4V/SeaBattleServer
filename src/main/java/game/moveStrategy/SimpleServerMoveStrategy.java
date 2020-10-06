@@ -6,7 +6,6 @@ import game.util.CoordinateCalculator;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 
 public class SimpleServerMoveStrategy implements MoveStrategy, Serializable {
@@ -41,8 +40,4 @@ public class SimpleServerMoveStrategy implements MoveStrategy, Serializable {
         return lastCalculated;
     }
 
-    @Override
-    public Collection<Coordinates> getUsedCoords() {
-        return Collections.unmodifiableCollection(this.usedCoords);
-    }
 }

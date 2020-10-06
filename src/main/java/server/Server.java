@@ -1,14 +1,17 @@
 package server;
 
-import data.UserData;
-import exception.NoSuchUserException;
+import entity.Pair;
+import enums.Opponent;
+import exception.NoSuchPlayerException;
 import exception.SuchUserAlreadyExists;
 import exception.UnknownRequestException;
-import game.battle.Battle;
+import game.entity.battle.Battle;
 import game.entity.Coordinates;
 import game.entity.Ship;
 import game.enums.FiringResult;
 import game.enums.Level;
+import game.enums.Turn;
+import game.exception.GameOverException;
 import game.service.FieldGenerator;
 import protocol.Request;
 import enums.RequestType;
@@ -19,12 +22,16 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+//TODO: create class ServerContext. Непраивльная регистрация: клентов-то двое в битве
 public class Server {
 
     private static final int SERVER_PORT = 7788;
-    private static final Map<String, UserData> DATA_MAP = new ConcurrentHashMap<>();
+    private static final int CLIENT_PORT = 7765;
+    private static final String SERVER_NAME = "SERVER";
+    private static final Map<Pair<String>, Battle> DATA_MAP = new ConcurrentHashMap<>();
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
@@ -47,7 +54,7 @@ public class Server {
                     Request request = getMessage(socket);
                     handleRequest(request);
                 } catch (IOException | ClassNotFoundException |
-                        SuchUserAlreadyExists | NoSuchUserException |
+                        SuchUserAlreadyExists | NoSuchPlayerException |
                         UnknownRequestException e) {
                     e.printStackTrace();
                 }
@@ -55,14 +62,14 @@ public class Server {
         }
     }
 
-    private Request getMessage(Socket socket) throws IOException, ClassNotFoundException, UnknownRequestException{
+    private Request getMessage(Socket socket) throws IOException, ClassNotFoundException, UnknownRequestException {
         Request request;
         try (ObjectInputStream objectInputStream =
                      new ObjectInputStream(
                              new BufferedInputStream(
                                      socket.getInputStream()))) {
             Object input = objectInputStream.readObject();
-            if(! (input instanceof Request)){
+            if (!(input instanceof Request)) {
                 throw new UnknownRequestException("Unknown request");
             }
             request = (Request) input;
@@ -70,8 +77,8 @@ public class Server {
         return request;
     }
 
-    private void sendMessage(String toWhom, Response response) {
-        try (Socket socket = new Socket("127.0.0.1", DATA_MAP.get(toWhom).getPort());
+    private void sendMessage(Response response) {
+        try (Socket socket = new Socket("127.0.0.1", CLIENT_PORT);
              ObjectOutputStream oos =
                      new ObjectOutputStream(
                              new BufferedOutputStream(
@@ -82,7 +89,7 @@ public class Server {
         }
     }
 
-    private void handleRequest(Request request) throws SuchUserAlreadyExists, NoSuchUserException {
+    private void handleRequest(Request request) throws SuchUserAlreadyExists, NoSuchPlayerException {
         if (request.getRequestType() == RequestType.MAKE_MOVE) {
             handleMove(request);
         } else if (request.getRequestType() == RequestType.REGISTRATION) {
@@ -92,41 +99,126 @@ public class Server {
         }
     }
 
+    //TODO: create client-client battle. I suppose, if client is the only one who is connected to
+    // server, we send him into queue, and then the next one trying to play vs human should be
+    // paired with the first one. Queue must be synchronized.
     private void register(Request request) throws SuchUserAlreadyExists {
-        if (DATA_MAP.containsKey(request.getFromWhom())) {
+        String name = request.getFromWhom();
+        if (DATA_MAP.keySet().stream().anyMatch((key) -> Objects.equals(key.getFirst(), name) ||
+                Objects.equals(key.getSecond(), name))) {
             throw new SuchUserAlreadyExists("Such user already exists!!");
         }
-        FieldGenerator fieldGenerator = new FieldGenerator();
-        UserData userData = new UserData((Integer) request.getAttribute("port"),
-                createBattle((Level) request.getAttribute("level"), fieldGenerator));
-        DATA_MAP.put(request.getFromWhom(), userData);
+        Level level = (Level) request.getAttribute("level");
+        Opponent opponent = (Opponent) request.getAttribute("opponent");
+        if(opponent == Opponent.SERVER) {
+            DATA_MAP.put(new Pair<>(name, SERVER_NAME), createClientServerBattle(level));
+        }else{
+
+        }
     }
 
-    private Battle createBattle(Level level, FieldGenerator fieldGenerator) {
+    private Battle createClientClientBattle(){
+        FieldGenerator fieldGenerator = new FieldGenerator();
+        Collection<Ship> firstPlayerShips = fieldGenerator.createShips();
+        Collection<Ship> secondPlayerShip = fieldGenerator.createShips();
+        return Battle.clientClientBattle(firstPlayerShips, secondPlayerShip);
+    }
+
+    private Battle createClientServerBattle(Level level) {
+        FieldGenerator fieldGenerator = new FieldGenerator();
         Collection<Ship> clientShips = fieldGenerator.createShips();
         Collection<Ship> serverShips = fieldGenerator.createShips();
-
-        return null;
+        return Battle.clientServerBattle(clientShips, serverShips, level);
     }
 
-    private FiringResult handleMove(Request moveRequest) throws NoSuchUserException {
-        if (!DATA_MAP.containsKey(moveRequest.getFromWhom())) {
-            throw new NoSuchUserException("Such user doesn't exist!!");
+    private void handleMove(Request moveRequest) throws NoSuchPlayerException {
+        String name = moveRequest.getFromWhom();
+        Pair<String> users = getRegisteredPair(name);
+        Battle battle = DATA_MAP.get(users);
+        Coordinates receivedCoordinates = (Coordinates) moveRequest.getAttribute("coordinates");
+
+        if (battle.isServerClientBattle()) {
+            try {
+                handleAttackOnServer(battle, receivedCoordinates, name);
+            } catch (GameOverException e) {
+                handleEndOfSession(name);
+            }
+        } else if (battle.isClientClientBattle()) {
+            try {
+                handleAttackOnAnotherClient(battle, receivedCoordinates, name);
+            } catch (GameOverException e) {
+                handleEndOfSession(users.getFirst());
+                handleEndOfSession(users.getSecond());
+            }
         }
-        Battle battle = DATA_MAP.get(moveRequest.getFromWhom()).getBattle();
-        Coordinates clientCoordinates = (Coordinates) moveRequest.getAttribute("coordinates");
 
-
-        return null;
     }
 
-    private void handleOtherRequests(Request request) {
-        String name = request.getFromWhom();
+    public void handleAttackOnAnotherClient(Battle battle, Coordinates coordinates, String name)
+            throws GameOverException, NoSuchPlayerException {
+        Pair<String> users = getRegisteredPair(name);
+        FiringResult firingResult;
+        if (Objects.equals(users.getFirst(), name) && battle.getTurn() == Turn.PLAYER_1) {
+             firingResult = battle.shootAtSecondPlayer(coordinates);
+            sendMessage(Response.attackResultResponse(users.getFirst(), firingResult));
+            sendMessage(Response.attackResultResponse(users.getSecond(), firingResult));
+        } else if (Objects.equals(users.getSecond(), name) && battle.getTurn() == Turn.PLAYER_2) {
+            firingResult = battle.shootAtFirstPlayer(coordinates);
+            sendMessage(Response.attackResultResponse(users.getFirst(), firingResult));
+            sendMessage(Response.attackResultResponse(users.getSecond(), firingResult));
+        }
+
+    }
+
+    public void handleAttackOnServer(Battle battle, Coordinates coordinates, String name) throws GameOverException {
+        FiringResult clientsFiringResult = battle.shootAtSecondPlayer(coordinates);
+        sendMessage(Response.attackResultResponse(name, clientsFiringResult));
+        if (clientsFiringResult == FiringResult.MISSED) {
+            FiringResult serversFiringResult;
+            do {
+                Coordinates serverFiringCoordinates = null;
+                if (battle.getServerMoveStrategy() != null) {
+                    serverFiringCoordinates = battle.getServerMoveStrategy().getCoordinates();
+                }
+                serversFiringResult = battle.shootAtFirstPlayer(serverFiringCoordinates);
+                sendMessage(Response.moveResponse(name, serverFiringCoordinates));
+            } while (serversFiringResult != FiringResult.MISSED);
+        }
+    }
+
+    private void handleOtherRequests(Request request) throws NoSuchPlayerException {
         if (request.getRequestType() == RequestType.EXIT) {
-            Battle battle = DATA_MAP.get(name).getBattle();
-            Map<String, Integer> statistics = battle.getStatisticsSecond();
-            sendMessage(name, Response.statisticsResponse(name, statistics));
-            DATA_MAP.remove(name);
+            handleEndOfSession(request.getFromWhom());
         }
+    }
+
+    private void handleEndOfSession(String clientName) throws NoSuchPlayerException {
+        Battle battle = getBattle(clientName);
+        if (battle.isServerClientBattle()) {
+            sendMessage(Response.statisticsResponse(clientName, battle.getStatisticsSecond()));
+            return;
+        }
+        Pair<String> users = getRegisteredPair(clientName);
+        sendMessage(Response.statisticsResponse(users.getFirst(), battle.getStatisticsFirst()));
+        sendMessage(Response.statisticsResponse(users.getSecond(), battle.getStatisticsSecond()));
+        removeBattle(clientName);
+    }
+
+
+    private Battle getBattle(String name) throws NoSuchPlayerException {
+        return DATA_MAP.get(getRegisteredPair(name));
+    }
+
+    private void removeBattle(String name) throws NoSuchPlayerException {
+        DATA_MAP.remove(getRegisteredPair(name));
+    }
+
+    private Pair<String> getRegisteredPair(String oneOfPair) throws NoSuchPlayerException {
+        for (Pair<String> key : DATA_MAP.keySet()) {
+            if (Objects.equals(key.getFirst(), oneOfPair) || Objects.equals(key.getSecond(), oneOfPair)) {
+                return key;
+            }
+        }
+        throw new NoSuchPlayerException("Player " + oneOfPair + " is not registered");
     }
 }

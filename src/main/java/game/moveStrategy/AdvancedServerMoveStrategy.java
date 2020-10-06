@@ -88,10 +88,4 @@ public class AdvancedServerMoveStrategy implements MoveStrategy, Serializable {
             }
         }
     }
-
-    @Override
-    public Collection<Coordinates> getUsedCoords() {
-        return Collections.unmodifiableCollection(unprofitableCoordinates);
-
-    }
 }

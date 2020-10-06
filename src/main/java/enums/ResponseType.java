@@ -1,5 +1,5 @@
 package enums;
 
 public enum ResponseType {
-    ECHO_REQUEST, STATISTICS
+    ECHO_RESPONSE, STATISTICS, MOVE_RESPONSE, ATTACK_RESULT;
 }

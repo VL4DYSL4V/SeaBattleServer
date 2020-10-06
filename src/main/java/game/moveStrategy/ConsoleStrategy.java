@@ -5,7 +5,6 @@ import game.enums.FieldConstraints;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Scanner;
 
@@ -48,8 +47,4 @@ public class ConsoleStrategy implements MoveStrategy, Serializable {
         return input;
     }
 
-    @Override
-    public Collection<Coordinates> getUsedCoords() {
-        return Collections.unmodifiableCollection(usedCoordinates);
-    }
 }

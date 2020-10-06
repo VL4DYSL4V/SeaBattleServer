@@ -1,6 +1,8 @@
 package protocol;
 
 import enums.ResponseType;
+import game.entity.Coordinates;
+import game.enums.FiringResult;
 
 import java.io.Externalizable;
 import java.io.IOException;
@@ -13,7 +15,7 @@ import java.util.Objects;
 public class Response implements Externalizable {
 
     private String toWhom = "";
-    private ResponseType responseType = ResponseType.ECHO_REQUEST;
+    private ResponseType responseType = ResponseType.ECHO_RESPONSE;
     private Map<String, Object> attributes = new HashMap<>();
 
     public Response(){}
@@ -34,6 +36,18 @@ public class Response implements Externalizable {
     public static Response statisticsResponse(String toWhom, Map<String, Integer> statistics){
         Response response = new Response(toWhom, ResponseType.STATISTICS);
         response.addAttribute("statistics", statistics);
+        return response;
+    }
+
+    public static Response moveResponse(String toWhom, Coordinates coordinates){
+        Response response = new Response(toWhom, ResponseType.MOVE_RESPONSE);
+        response.addAttribute("coordinates", coordinates);
+        return response;
+    }
+
+    public static Response attackResultResponse(String toWhom, FiringResult firingResult){
+        Response response = new Response(toWhom, ResponseType.ATTACK_RESULT);
+        response.addAttribute("firingResult", firingResult);
         return response;
     }
 
