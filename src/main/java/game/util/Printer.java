@@ -2,12 +2,24 @@ package game.util;
 
 import game.entity.Coordinates;
 import game.entity.Ship;
+import game.entity.battle.Battle;
 import game.enums.FieldConstraints;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 
 public class Printer {
+
+    public static void printPretty(Battle battle){
+        String[][] field1 = createField(FieldConstraints.FIELD_HEIGHT.getValue(), FieldConstraints.FIELD_WIDTH.getValue());
+        String[][] field2 = createField(FieldConstraints.FIELD_HEIGHT.getValue(), FieldConstraints.FIELD_WIDTH.getValue());
+
+        fillField(field1, battle.getFirstPlayerShips(), Collections.EMPTY_LIST);
+        fillField(field2, battle.getSecondPlayerShips(), Collections.EMPTY_LIST);
+
+        printPretty(field1, field2);
+    }
 
     public static void printPretty(Collection<Ship> player1ships, Collection<Ship> player2ships,
                                    Collection<Coordinates> usedCoordinates1,
@@ -37,9 +49,13 @@ public class Printer {
                                         Collection<Coordinates> usedCoordinates){
         usedCoordinates.forEach(coordinates -> field[coordinates.getY()][coordinates.getX()] = " ");
         playerShips.forEach((ship) -> {
-            Collection<Coordinates> coordinates = ship.getOccupiedCoordinates();
-            coordinates.forEach(currCoords ->
-                    field[currCoords.getY()][currCoords.getX()] = "+");
+            if(!ship.isDestroyed()) {
+                Collection<Coordinates> occupiedCoordinates = ship.getOccupiedCoordinates();
+                occupiedCoordinates.forEach(currCoords ->
+                        field[currCoords.getY()][currCoords.getX()] = "+");
+                Collection<Coordinates> damagedCoordinates = ship.getDamagedCoordinates();
+                damagedCoordinates.forEach(coordinates -> field[coordinates.getY()][coordinates.getX()] = "@");
+            }
         });
     }
 

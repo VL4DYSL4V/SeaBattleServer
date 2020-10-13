@@ -11,7 +11,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 
-public class AdvancedServerMoveStrategy implements MoveStrategy, Serializable {
+public final class AdvancedServerMoveStrategy implements MoveStrategy, Serializable {
 
     private Collection<Ship> clientShips;
     private Coordinates firstDamaged;

@@ -8,10 +8,15 @@ import game.enums.Level;
 import game.enums.Turn;
 import game.exception.GameOverException;
 import game.moveStrategy.MoveStrategy;
+import game.service.FieldGenerator;
 
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Map;
+
+//TODO: может, сделать 1 метод для стрельбы, и LinkedList запросов на выстрел в каждой
+// битве. Тогда битва сама будет решать, кто и в кого сейчас стреляет, и будет просто результат
+// возвращать. Так а как решить, кому этот запрос отправлять?
 
 public class Battle implements Serializable {
     private BattleContext battleContext = new BattleContext();
@@ -24,6 +29,20 @@ public class Battle implements Serializable {
 
     private Battle(BattleContext battleContext) {
         this.battleContext = battleContext;
+    }
+
+    public static Battle generateClientClientBattle() {
+        FieldGenerator fieldGenerator = new FieldGenerator();
+        Collection<Ship> firstPlayerShips = fieldGenerator.createShips();
+        Collection<Ship> secondPlayerShip = fieldGenerator.createShips();
+        return Battle.clientClientBattle(firstPlayerShips, secondPlayerShip);
+    }
+
+    public static Battle generateClientServerBattle(Level level) {
+        FieldGenerator fieldGenerator = new FieldGenerator();
+        Collection<Ship> clientShips = fieldGenerator.createShips();
+        Collection<Ship> serverShips = fieldGenerator.createShips();
+        return Battle.clientServerBattle(clientShips, serverShips, level);
     }
 
     public static Battle clientClientBattle(Collection<Ship> firstClientShip, Collection<Ship> secondClientShips) {
@@ -78,11 +97,11 @@ public class Battle implements Serializable {
     }
 
     private FiringResult fireAtFirst(Coordinates whereTo) {
-        return fireAt(whereTo, battleContext.getSecondPlayerShips());
+        return fireAt(whereTo, battleContext.getFirstPlayerShips());
     }
 
     private FiringResult fireAtSecond(Coordinates whereTo) {
-        return fireAt(whereTo, battleContext.getFirstPlayerShips());
+        return fireAt(whereTo, battleContext.getSecondPlayerShips());
     }
 
     private FiringResult fireAt(Coordinates whereTo, Collection<Ship> opponentShips) {
@@ -113,11 +132,11 @@ public class Battle implements Serializable {
         return !isServerClientBattle();
     }
 
-    public Map<String, Integer> getStatisticsFirst() {
+    public Map<FiringResult, Integer> getStatisticsFirst() {
         return battleStatistics.getStatisticsFirst();
     }
 
-    public Map<String, Integer> getStatisticsSecond() {
+    public Map<FiringResult, Integer> getStatisticsSecond() {
         return battleStatistics.getStatisticsSecond();
     }
 
@@ -133,4 +152,7 @@ public class Battle implements Serializable {
         return battleContext.getSecondPlayerShips();
     }
 
+    public boolean gameOver(){
+        return battleContext.gameIsOver();
+    }
 }

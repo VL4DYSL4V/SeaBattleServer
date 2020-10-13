@@ -1,25 +1,27 @@
-package game.moveStrategy;
+package client.dialog;
 
+import client.exception.SessionInterruption;
 import game.entity.Coordinates;
 import game.enums.FieldConstraints;
 
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Scanner;
 
-public class ConsoleStrategy implements MoveStrategy, Serializable {
+public class CoordinatePrayer implements CoordinateSupplier, ExitAware, Serializable {
 
     private Collection<Coordinates> usedCoordinates = new HashSet<>(50);
     private Scanner sc = new Scanner(System.in);
 
     private static final long serialVersionUID = -5519681931623805705L;
 
-    public ConsoleStrategy() {
+    public CoordinatePrayer() {
     }
 
     @Override
-    public Coordinates getCoordinates() {
+    public Coordinates getCoordinates() throws SessionInterruption {
         Coordinates out;
         boolean isUsed;
         do {
@@ -34,13 +36,17 @@ public class ConsoleStrategy implements MoveStrategy, Serializable {
         return out;
     }
 
-    private String askCoordinates() {
+    private String askCoordinates() throws SessionInterruption {
         String input;
         do {
-            System.out.println("Input coordinates in 'x - y' format, where\n x is "
-                    + FieldConstraints.MIN_X.getValue() + " - " + FieldConstraints.MAX_X.getValue() + " and\n y is "
-                    + FieldConstraints.MIN_Y.getValue() + " - " + FieldConstraints.MAX_Y.getValue() + " including.");
+            System.out.println("Input coordinates in 'x - y' format, where x is "
+                    + FieldConstraints.MIN_X.getValue() + " - " + FieldConstraints.MAX_X.getValue() + " and y is "
+                    + FieldConstraints.MIN_Y.getValue() + " - " + FieldConstraints.MAX_Y.getValue() + " including. " +
+                    "To exit, input 'exit'.");
             input = sc.nextLine().trim().toLowerCase();
+            if(Objects.equals("exit", input)){
+                handleExit();
+            }
         } while (!input.matches("[" + FieldConstraints.MIN_X.getValue() +
                 "-" + FieldConstraints.MAX_X.getValue() + "] - [" + FieldConstraints.MIN_Y.getValue() +
                 "-" + FieldConstraints.MAX_Y.getValue() + "]"));

@@ -1,5 +1,17 @@
 package main;
 
+import client.Client;
+import game.entity.Coordinates;
+import game.entity.Ship;
+import game.entity.battle.Battle;
+import game.enums.FiringResult;
+import game.exception.GameOverException;
+import game.moveStrategy.AdvancedServerMoveStrategy;
+import game.moveStrategy.MoveStrategy;
+import game.moveStrategy.SimpleServerMoveStrategy;
+import game.util.Printer;
+import server.Server;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
@@ -10,8 +22,38 @@ import java.nio.channels.*;
 
 //Current lowest amount of moves = 23 :D
 public class Main {
-    public static void main(String[] args) throws JAXBException {
-        System.out.println("Battle is over");
+    public static void main(String[] args) throws JAXBException{
+        new Thread(new Server()).start();
+        new Client().run();
+    }
+
+    private static void testStandardAdvancedBattle(){
+        Battle battle = Battle.generateClientClientBattle();
+        Collection<Ship> ships1 = battle.getFirstPlayerShips();
+        Collection<Ship> ships2 = battle.getSecondPlayerShips();
+        MoveStrategy moveStrategy1 = new AdvancedServerMoveStrategy(ships2);
+//        MoveStrategy moveStrategy2 = new AdvancedServerMoveStrategy(ships1);
+        MoveStrategy moveStrategy2 = new SimpleServerMoveStrategy();
+        try {
+            while (!battle.gameOver()) {
+                FiringResult firingResult1;
+                do {
+                    Coordinates coordinates1 = moveStrategy1.getCoordinates();
+                    firingResult1 = battle.shootAtSecondPlayer(coordinates1);
+                } while (firingResult1 != FiringResult.MISSED);
+                FiringResult firingResult2;
+                do {
+                    Coordinates coordinates2 = moveStrategy2.getCoordinates();
+                    firingResult2 = battle.shootAtFirstPlayer(coordinates2);
+                } while (firingResult2 != FiringResult.MISSED);
+                Printer.printPretty(ships1, ships2, new ArrayList<>(), new ArrayList<>());
+            }
+        }catch (GameOverException e) {
+            System.out.println("Winner: " + battle.getTurn());
+            Printer.printPretty(ships1, ships2, new ArrayList<>(), new ArrayList<>());
+            System.out.println("Statistics first: " + battle.getStatisticsFirst());
+            System.out.println("Statistics second: " + battle.getStatisticsSecond());
+        }
     }
 
     private static void server() throws IOException {

@@ -1,21 +1,23 @@
 package server;
 
+import dao.DAO;
+import dao.HardCodeDAO;
 import entity.Pair;
-import enums.Opponent;
+import game.enums.Opponent;
+import enums.ResponseType;
 import exception.NoSuchPlayerException;
-import exception.SuchUserAlreadyExists;
 import exception.UnknownRequestException;
+import game.entity.Ship;
 import game.entity.battle.Battle;
 import game.entity.Coordinates;
-import game.entity.Ship;
 import game.enums.FiringResult;
 import game.enums.Level;
-import game.enums.Turn;
 import game.exception.GameOverException;
-import game.service.FieldGenerator;
+import game.util.Printer;
 import protocol.Request;
 import enums.RequestType;
 import protocol.Response;
+import util.RegistrationUtil;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -23,42 +25,40 @@ import java.net.Socket;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
-//TODO: create class ServerContext. Непраивльная регистрация: клентов-то двое в битве
-public class Server {
+public class Server implements Runnable {
 
     private static final int SERVER_PORT = 7788;
     private static final int CLIENT_PORT = 7765;
-    private static final String SERVER_NAME = "SERVER";
-    private static final Map<Pair<String>, Battle> DATA_MAP = new ConcurrentHashMap<>();
+    private static final DAO GAME_DAO = new HardCodeDAO();
+    private static final Executor EXECUTOR = Executors.newFixedThreadPool(100);
 
-    public void start() {
+    @Override
+    public void run() {
         try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
             while (true) {
+                final Socket socket = serverSocket.accept();
+//                Runnable task = new Runnable() {
+//                    @Override
+//                    public void run() {
+                Request request = new Request();
                 try {
-                    runServer(serverSocket);
-                } catch (IOException e) {
+                    request = getMessage(socket);
+//                    System.out.println("Handling" + request + Thread.currentThread().getName());
+                    handleRequest(request);
+                } catch (IOException | ClassNotFoundException | UnknownRequestException e) {
                     e.printStackTrace();
+                } catch (NoSuchPlayerException e) {
+                    sendMessage(Response.dialogResponse(request.getFromWhom(), e.getMessage()));
                 }
+//                    }
+//                };
+//                EXECUTOR.execute(task);
             }
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    private void runServer(ServerSocket serverSocket) throws IOException {
-        try (Socket socket = serverSocket.accept()) {
-            new Thread(() -> {
-                try {
-                    Request request = getMessage(socket);
-                    handleRequest(request);
-                } catch (IOException | ClassNotFoundException |
-                        SuchUserAlreadyExists | NoSuchPlayerException |
-                        UnknownRequestException e) {
-                    e.printStackTrace();
-                }
-            }).start();
         }
     }
 
@@ -89,9 +89,13 @@ public class Server {
         }
     }
 
-    private void handleRequest(Request request) throws SuchUserAlreadyExists, NoSuchPlayerException {
+    private synchronized void handleRequest(Request request) throws NoSuchPlayerException {
         if (request.getRequestType() == RequestType.MAKE_MOVE) {
-            handleMove(request);
+            try {
+                handleMove(request);
+            } catch (GameOverException e) {
+                handleEndOfSession(request.getFromWhom());
+            }
         } else if (request.getRequestType() == RequestType.REGISTRATION) {
             register(request);
         } else {
@@ -99,70 +103,48 @@ public class Server {
         }
     }
 
-    //TODO: create client-client battle. I suppose, if client is the only one who is connected to
-    // server, we send him into queue, and then the next one trying to play vs human should be
-    // paired with the first one. Queue must be synchronized.
-    private void register(Request request) throws SuchUserAlreadyExists {
+    private void register(Request request) {
         String name = request.getFromWhom();
-        if (DATA_MAP.keySet().stream().anyMatch((key) -> Objects.equals(key.getFirst(), name) ||
-                Objects.equals(key.getSecond(), name))) {
-            throw new SuchUserAlreadyExists("Such user already exists!!");
+        if (GAME_DAO.userExists(name)) {
+            sendMessage(new Response(request.getFromWhom(), ResponseType.FAILED_REGISTRATION));
         }
-        Level level = (Level) request.getAttribute("level");
         Opponent opponent = (Opponent) request.getAttribute("opponent");
-        if(opponent == Opponent.SERVER) {
-            DATA_MAP.put(new Pair<>(name, SERVER_NAME), createClientServerBattle(level));
-        }else{
-
+        Collection<Ship> clientShips;
+        if (opponent == Opponent.SERVER) {
+            clientShips = RegistrationUtil.hookUpWithServer(name, (Level) request.getAttribute("level"), GAME_DAO);
+        } else {
+            if (GAME_DAO.someoneIsWaiting()) {
+                clientShips = RegistrationUtil.hookUpWithPlayer(name, GAME_DAO);
+            } else {
+                clientShips = RegistrationUtil.putInQueue(name, GAME_DAO);
+            }
         }
+        sendMessage(Response.successfulRegistrationResponse(name, clientShips));
     }
 
-    private Battle createClientClientBattle(){
-        FieldGenerator fieldGenerator = new FieldGenerator();
-        Collection<Ship> firstPlayerShips = fieldGenerator.createShips();
-        Collection<Ship> secondPlayerShip = fieldGenerator.createShips();
-        return Battle.clientClientBattle(firstPlayerShips, secondPlayerShip);
-    }
-
-    private Battle createClientServerBattle(Level level) {
-        FieldGenerator fieldGenerator = new FieldGenerator();
-        Collection<Ship> clientShips = fieldGenerator.createShips();
-        Collection<Ship> serverShips = fieldGenerator.createShips();
-        return Battle.clientServerBattle(clientShips, serverShips, level);
-    }
-
-    private void handleMove(Request moveRequest) throws NoSuchPlayerException {
+    private void handleMove(Request moveRequest) throws NoSuchPlayerException, GameOverException {
         String name = moveRequest.getFromWhom();
-        Pair<String> users = getRegisteredPair(name);
-        Battle battle = DATA_MAP.get(users);
+        Battle battle = GAME_DAO.getBattle(GAME_DAO.getRegisteredPair(name));
         Coordinates receivedCoordinates = (Coordinates) moveRequest.getAttribute("coordinates");
 
         if (battle.isServerClientBattle()) {
-            try {
-                handleAttackOnServer(battle, receivedCoordinates, name);
-            } catch (GameOverException e) {
-                handleEndOfSession(name);
-            }
+            handleAttackOnServer(battle, receivedCoordinates, name);
         } else if (battle.isClientClientBattle()) {
-            try {
-                handleAttackOnAnotherClient(battle, receivedCoordinates, name);
-            } catch (GameOverException e) {
-                handleEndOfSession(users.getFirst());
-                handleEndOfSession(users.getSecond());
-            }
+            handleAttackOnAnotherClient(battle, receivedCoordinates, name);
         }
-
+        Printer.printPretty(battle);
     }
 
-    public void handleAttackOnAnotherClient(Battle battle, Coordinates coordinates, String name)
+    //TODO: it is not even tested yet
+    private void handleAttackOnAnotherClient(Battle battle, Coordinates coordinates, String name)
             throws GameOverException, NoSuchPlayerException {
-        Pair<String> users = getRegisteredPair(name);
+        Pair<String> users = GAME_DAO.getRegisteredPair(name);
         FiringResult firingResult;
-        if (Objects.equals(users.getFirst(), name) && battle.getTurn() == Turn.PLAYER_1) {
-             firingResult = battle.shootAtSecondPlayer(coordinates);
+        if (Objects.equals(users.getFirst(), name)) {
+            firingResult = battle.shootAtSecondPlayer(coordinates);
             sendMessage(Response.attackResultResponse(users.getFirst(), firingResult));
             sendMessage(Response.attackResultResponse(users.getSecond(), firingResult));
-        } else if (Objects.equals(users.getSecond(), name) && battle.getTurn() == Turn.PLAYER_2) {
+        } else if (Objects.equals(users.getSecond(), name)) {
             firingResult = battle.shootAtFirstPlayer(coordinates);
             sendMessage(Response.attackResultResponse(users.getFirst(), firingResult));
             sendMessage(Response.attackResultResponse(users.getSecond(), firingResult));
@@ -170,7 +152,8 @@ public class Server {
 
     }
 
-    public void handleAttackOnServer(Battle battle, Coordinates coordinates, String name) throws GameOverException {
+    private void handleAttackOnServer(Battle battle, Coordinates coordinates, String name)
+            throws GameOverException, NoSuchPlayerException {
         FiringResult clientsFiringResult = battle.shootAtSecondPlayer(coordinates);
         sendMessage(Response.attackResultResponse(name, clientsFiringResult));
         if (clientsFiringResult == FiringResult.MISSED) {
@@ -184,41 +167,32 @@ public class Server {
                 sendMessage(Response.moveResponse(name, serverFiringCoordinates));
             } while (serversFiringResult != FiringResult.MISSED);
         }
+        if (battle.gameOver()) {
+            handleEndOfSession(name);
+        }
     }
 
     private void handleOtherRequests(Request request) throws NoSuchPlayerException {
         if (request.getRequestType() == RequestType.EXIT) {
             handleEndOfSession(request.getFromWhom());
+        } else if (request.getRequestType() == RequestType.DIALOG_REQUEST) {
+            sendMessage(new Response(request.getFromWhom(), ResponseType.DIALOG_RESPONSE));
         }
     }
 
     private void handleEndOfSession(String clientName) throws NoSuchPlayerException {
-        Battle battle = getBattle(clientName);
-        if (battle.isServerClientBattle()) {
-            sendMessage(Response.statisticsResponse(clientName, battle.getStatisticsSecond()));
-            return;
+        Pair<String> users = GAME_DAO.getRegisteredPair(clientName);
+        Battle battle = GAME_DAO.getBattle(users);
+        sendGoodBye(users.getFirst(), battle.getStatisticsFirst());
+        if (battle.isClientClientBattle()) {
+            sendGoodBye(users.getSecond(), battle.getStatisticsSecond());
         }
-        Pair<String> users = getRegisteredPair(clientName);
-        sendMessage(Response.statisticsResponse(users.getFirst(), battle.getStatisticsFirst()));
-        sendMessage(Response.statisticsResponse(users.getSecond(), battle.getStatisticsSecond()));
-        removeBattle(clientName);
+        GAME_DAO.removeBattle(users);
     }
 
-
-    private Battle getBattle(String name) throws NoSuchPlayerException {
-        return DATA_MAP.get(getRegisteredPair(name));
+    private void sendGoodBye(String toWhom, Map<FiringResult, Integer> statistics) {
+        sendMessage(new Response(toWhom, ResponseType.GAME_OVER));
+        sendMessage(Response.statisticsResponse(toWhom, statistics));
     }
 
-    private void removeBattle(String name) throws NoSuchPlayerException {
-        DATA_MAP.remove(getRegisteredPair(name));
-    }
-
-    private Pair<String> getRegisteredPair(String oneOfPair) throws NoSuchPlayerException {
-        for (Pair<String> key : DATA_MAP.keySet()) {
-            if (Objects.equals(key.getFirst(), oneOfPair) || Objects.equals(key.getSecond(), oneOfPair)) {
-                return key;
-            }
-        }
-        throw new NoSuchPlayerException("Player " + oneOfPair + " is not registered");
-    }
 }

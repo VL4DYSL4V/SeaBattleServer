@@ -2,12 +2,14 @@ package protocol;
 
 import enums.ResponseType;
 import game.entity.Coordinates;
+import game.entity.Ship;
 import game.enums.FiringResult;
 
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -15,7 +17,7 @@ import java.util.Objects;
 public class Response implements Externalizable {
 
     private String toWhom = "";
-    private ResponseType responseType = ResponseType.ECHO_RESPONSE;
+    private ResponseType responseType = ResponseType.DIALOG_RESPONSE;
     private Map<String, Object> attributes = new HashMap<>();
 
     public Response(){}
@@ -33,7 +35,7 @@ public class Response implements Externalizable {
         return attributes.get(key);
     }
 
-    public static Response statisticsResponse(String toWhom, Map<String, Integer> statistics){
+    public static Response statisticsResponse(String toWhom, Map<FiringResult, Integer> statistics){
         Response response = new Response(toWhom, ResponseType.STATISTICS);
         response.addAttribute("statistics", statistics);
         return response;
@@ -48,6 +50,18 @@ public class Response implements Externalizable {
     public static Response attackResultResponse(String toWhom, FiringResult firingResult){
         Response response = new Response(toWhom, ResponseType.ATTACK_RESULT);
         response.addAttribute("firingResult", firingResult);
+        return response;
+    }
+
+    public static Response dialogResponse(String toWhom, String message){
+        Response response = new Response(toWhom, ResponseType.DIALOG_RESPONSE);
+        response.addAttribute("message", message);
+        return response;
+    }
+
+    public static Response successfulRegistrationResponse(String toWhom, Collection<Ship> ships){
+        Response response = new Response(toWhom, ResponseType.SUCCESSFUL_REGISTRATION);
+        response.addAttribute("ships", ships);
         return response;
     }
 

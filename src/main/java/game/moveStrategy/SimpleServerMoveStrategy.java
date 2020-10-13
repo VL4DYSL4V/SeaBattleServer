@@ -8,7 +8,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
 
-public class SimpleServerMoveStrategy implements MoveStrategy, Serializable {
+public final class SimpleServerMoveStrategy implements MoveStrategy, Serializable {
 
     private final Collection<Coordinates> usedCoords = new HashSet<>(50);
     private Coordinates lastCalculated = new Coordinates(0, 0);

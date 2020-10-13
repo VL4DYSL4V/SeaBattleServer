@@ -9,21 +9,21 @@ import java.util.Objects;
 
 public class BattleStatistics implements Serializable {
 
-    private Map<String, Integer> statisticsFirst =  new HashMap<>();
-    private Map<String, Integer> statisticsSecond = new HashMap<>();
+    private Map<FiringResult, Integer> statisticsFirst =  new HashMap<>();
+    private Map<FiringResult, Integer> statisticsSecond = new HashMap<>();
 
     private static final long serialVersionUID = 3348698559001402439L;
 
-    {
-        statisticsSecond.put("aimed", 0);
-        statisticsSecond.put("missed", 0);
-        statisticsSecond.put("destroyed", 0);
-        statisticsFirst.put("aimed", 0);
-        statisticsFirst.put("missed", 0);
-        statisticsFirst.put("destroyed", 0);
+    public BattleStatistics() {
+        initStatistics();
     }
 
-    public BattleStatistics() {}
+    public void initStatistics(){
+        for(FiringResult firingResult:FiringResult.values()) {
+            statisticsFirst.put(firingResult, 0);
+            statisticsSecond.put(firingResult, 0);
+        }
+    }
 
     public void updateStatisticsFirst(FiringResult firingResult){
         updateStatistics(statisticsFirst, firingResult);
@@ -33,33 +33,20 @@ public class BattleStatistics implements Serializable {
         updateStatistics(statisticsSecond, firingResult);
     }
 
-    private void updateStatistics(Map<String, Integer> statistics, FiringResult firingResult) {
-        if (firingResult == FiringResult.AIMED) {
-            incrementAiming(statistics);
-        } else if (firingResult == FiringResult.DESTROYED) {
-            incrementDestroyed(statistics);
-        } else {
-            incrementMissed(statistics);
+    /**Увеличить статистику по любому результату на 1; Но если результат = уничтожение, то надо увеличить
+     * ещё и статистику попаданий*/
+    private void updateStatistics(Map<FiringResult, Integer> statistics, FiringResult firingResult) {
+        statistics.put(firingResult, statistics.get(firingResult) + 1);
+        if(firingResult == FiringResult.DESTROYED){
+            statistics.put(FiringResult.AIMED, statistics.get(FiringResult.AIMED) + 1);
         }
     }
 
-    private void incrementAiming(Map<String, Integer> statistics) {
-        statistics.put("aimed", statisticsSecond.get("aimed") + 1);
-    }
-
-    private void incrementDestroyed(Map<String, Integer> statistics) {
-        statistics.put("destroyed", statisticsSecond.get("destroyed") + 1);
-    }
-
-    private void incrementMissed(Map<String, Integer> statistics) {
-        statistics.put("missed", statisticsSecond.get("missed") + 1);
-    }
-
-    public Map<String, Integer> getStatisticsFirst() {
+    public Map<FiringResult, Integer> getStatisticsFirst() {
         return statisticsFirst;
     }
 
-    public Map<String, Integer> getStatisticsSecond() {
+    public Map<FiringResult, Integer> getStatisticsSecond() {
         return statisticsSecond;
     }
 

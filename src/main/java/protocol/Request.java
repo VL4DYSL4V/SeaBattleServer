@@ -1,6 +1,6 @@
 package protocol;
 
-import enums.Opponent;
+import game.enums.Opponent;
 import game.entity.Coordinates;
 import game.enums.Level;
 import enums.RequestType;
@@ -16,7 +16,7 @@ import java.util.Objects;
 public class Request implements Externalizable {
 
     private String fromWhom = "";
-    private RequestType requestType = RequestType.ECHO_REQUEST;
+    private RequestType requestType = RequestType.DIALOG_REQUEST;
     private Map<String, Object> attributes = new HashMap<>();
 
     public Request() {
@@ -39,10 +39,8 @@ public class Request implements Externalizable {
         return new Request(fromWhom, RequestType.EXIT);
     }
 
-    public static Request registrationRequest(String whom, Integer transmittersServerPort,
-                                              Level level, Opponent opponent) {
+    public static Request registrationRequest(String whom, Level level, Opponent opponent) {
         Request out = new Request(whom, RequestType.REGISTRATION);
-        out.addAttribute("port", transmittersServerPort);
         out.addAttribute("level", level);
         out.addAttribute("opponent", opponent);
         return out;
